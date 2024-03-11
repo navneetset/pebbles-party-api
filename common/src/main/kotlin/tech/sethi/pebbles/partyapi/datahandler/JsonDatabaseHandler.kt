@@ -35,6 +35,10 @@ object JsonDatabaseHandler : DBInterface {
         if (parties.any { it.name == party.name }) {
             return PartyResponse.ALREADY_PARTY
         }
+        // check if player is in a party
+        if (parties.any { it.members.containsAll(party.members) }) {
+            return PartyResponse.ALREADY_PARTY
+        }
         val partyFile = File(partyFolder, "${party.name}.json")
         partyFile.writeText(gson.toJson(party))
         parties.add(party)

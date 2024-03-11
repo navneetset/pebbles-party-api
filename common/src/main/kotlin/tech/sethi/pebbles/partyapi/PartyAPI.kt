@@ -5,6 +5,7 @@ import dev.architectury.event.events.common.LifecycleEvent
 import net.minecraft.server.MinecraftServer
 import org.apache.logging.log4j.LogManager
 import tech.sethi.pebbles.partyapi.commands.PartyCommand
+import tech.sethi.pebbles.partyapi.eventlistener.JoinPartyEvent
 import tech.sethi.pebbles.partyapi.util.ConfigHandler
 
 object PartyAPI {
@@ -20,6 +21,12 @@ object PartyAPI {
         CommandRegistrationEvent.EVENT.register { dispatcher, _, _ ->
             PartyCommand.register(dispatcher)
         }
+
+//        JoinPartyEvent.EVENT.register(object : JoinPartyEvent {
+//            override fun onJoinParty(playerName: String) {
+//                LOGGER.info("$playerName joined a party!")
+//            }
+//        })
 
         ConfigHandler
     }

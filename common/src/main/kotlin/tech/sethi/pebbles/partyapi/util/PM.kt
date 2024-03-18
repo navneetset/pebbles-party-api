@@ -16,11 +16,14 @@ import net.minecraft.nbt.NbtString
 import net.minecraft.registry.Registries
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.command.ServerCommandSource
+import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.sound.SoundEvent
 import net.minecraft.text.MutableText
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
+import tech.sethi.pebbles.partyapi.PartyAPI
 import tech.sethi.pebbles.partyapi.PartyAPI.server
+import java.util.*
 
 object PM {
 
@@ -150,5 +153,13 @@ object PM {
         val hours = minutes / 60
 
         return "${hours}h ${minutes % 60}m ${seconds % 60}s"
+    }
+
+    fun getPlayer(uuidOrName: String): ServerPlayerEntity? {
+        try {
+            return PartyAPI.server!!.playerManager.getPlayer(UUID.fromString(uuidOrName))
+        } catch (e: IllegalArgumentException) {
+            return PartyAPI.server!!.playerManager.getPlayer(uuidOrName)
+        }
     }
 }

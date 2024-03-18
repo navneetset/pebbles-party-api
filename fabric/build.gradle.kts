@@ -33,13 +33,17 @@ dependencies {
     // Remove the next line if you don't want to depend on the API
     modApi("dev.architectury:architectury-fabric:${rootProject.property("architectury_version")}")
 
+    implementation("redis.clients:jedis:5.1.0")
+
+    shadowCommon("redis.clients:jedis:5.1.0")
+
     common(project(":common", "namedElements")) {
         isTransitive = false
     }
-    shadowCommon(project(":common", "transformProductionFabric")){
+    shadowCommon(project(":common", "transformProductionFabric")) {
         isTransitive = false
     }
-    common(project(":fabric-like", "namedElements")){
+    common(project(":fabric-like", "namedElements")) {
         isTransitive = false
     }
     shadowCommon(project(":fabric-like", "transformProductionFabric")) {
@@ -55,15 +59,17 @@ tasks.processResources {
     inputs.property("version", project.version)
 
     filesMatching("fabric.mod.json") {
-        expand(mapOf(
-            "group" to rootProject.property("maven_group"),
-            "version" to project.version,
+        expand(
+            mapOf(
+                "group" to rootProject.property("maven_group"),
+                "version" to project.version,
 
-            "mod_id" to rootProject.property("mod_id"),
-            "minecraft_version" to rootProject.property("minecraft_version"),
-            "architectury_version" to rootProject.property("architectury_version"),
-            "fabric_kotlin_version" to rootProject.property("fabric_kotlin_version")
-        ))
+                "mod_id" to rootProject.property("mod_id"),
+                "minecraft_version" to rootProject.property("minecraft_version"),
+                "architectury_version" to rootProject.property("architectury_version"),
+                "fabric_kotlin_version" to rootProject.property("fabric_kotlin_version")
+            )
+        )
     }
 }
 

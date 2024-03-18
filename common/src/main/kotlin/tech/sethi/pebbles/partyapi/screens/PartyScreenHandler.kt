@@ -62,8 +62,8 @@ class PartyScreenHandler(
             members.forEachIndexed { index, member ->
                 val slot = memberSlots[index]
                 val memberItem = ItemStack(Items.PLAYER_HEAD)
-                memberItem.orCreateNbt.putString("SkullOwner", member)
-                memberItem.setCustomName(PM.returnStyledText("<green>${member}</green>"))
+                memberItem.orCreateNbt.putString("SkullOwner", member.name)
+                memberItem.setCustomName(PM.returnStyledText("<green>${member.name}</green>"))
 
                 if (member == owner) {
                     PM.setLore(memberItem, mutableListOf("<yellow>Party Owner"))
@@ -75,7 +75,7 @@ class PartyScreenHandler(
 
 
     fun getParty(): Party? {
-        return PartyHandler.db.getPlayerParty(player.name.string)
+        return PartyHandler.db.getPlayerParty(player.uuidAsString)
     }
 
     override fun onSlotClick(slotIndex: Int, button: Int, actionType: SlotActionType?, player: PlayerEntity?) {

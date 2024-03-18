@@ -30,13 +30,12 @@ object ConfigHandler {
         val partyChatFormat: String = "<gold>[Party]</gold> <light_purple>{player_name}:</light_purple> <green>{message}",
         val datastore: DatastoreType = DatastoreType.JSON,
         val mongoDbConfig: MongoDbConfig = MongoDbConfig(),
-        val MongoDatastoreEnables: String = "Cross-Server Party"
     )
 
     data class MongoDbConfig(
         val uri: String = "mongodb://localhost:27017",
         val database: String = "pebbles_partyapi",
         val partyCollection: String = "Parties",
-        val chatCollection: String = "Chat"
+        val redisUrl: String = "redis://:password@localhost:6379",
     )
 }

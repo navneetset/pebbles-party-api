@@ -24,5 +24,6 @@ dependencies {
     implementation("org.mongodb:bson-kotlin:${property("mongo_version")}")
 
     modImplementation("net.fabricmc:fabric-language-kotlin:${rootProject.property("fabric_kotlin_version")}")
+    implementation("redis.clients:jedis:5.1.0")
 
 }

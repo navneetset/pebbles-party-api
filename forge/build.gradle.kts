@@ -54,21 +54,29 @@ tasks.processResources {
     inputs.property("version", project.version)
 
     filesMatching("META-INF/mods.toml") {
-        expand(mapOf(
-            "group" to rootProject.property("maven_group"),
-            "version" to project.version,
+        expand(
+            mapOf(
+                "group" to rootProject.property("maven_group"),
+                "version" to project.version,
 
-            "mod_id" to rootProject.property("mod_id"),
-            "minecraft_version" to rootProject.property("minecraft_version"),
-            "architectury_version" to rootProject.property("architectury_version"),
-            "kotlin_for_forge_version" to rootProject.property("kotlin_for_forge_version")
-        ))
+                "mod_id" to rootProject.property("mod_id"),
+                "minecraft_version" to rootProject.property("minecraft_version"),
+                "architectury_version" to rootProject.property("architectury_version"),
+                "kotlin_for_forge_version" to rootProject.property("kotlin_for_forge_version")
+            )
+        )
     }
 }
 
 tasks.shadowJar {
     exclude("fabric.mod.json")
     exclude("architectury.common.json")
+    exclude("com/google/gson/**/*")
+    exclude("org/intellij/**/*")
+
+    relocate("net.kyori", "tech.sethi.pebbles.partyapi.kyori")
+    relocate("META-INF/services", "META-INF/services/tech.sethi.pebbles.partyapi")
+
     configurations = listOf(shadowCommon)
     archiveClassifier.set("dev-shadow")
 }

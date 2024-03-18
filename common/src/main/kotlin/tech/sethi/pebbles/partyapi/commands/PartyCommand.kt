@@ -14,18 +14,30 @@ import net.minecraft.text.Text
 import tech.sethi.pebbles.partyapi.PartyAPI
 import tech.sethi.pebbles.partyapi.dataclass.Party
 import tech.sethi.pebbles.partyapi.dataclass.PartyChat
+import tech.sethi.pebbles.partyapi.dataclass.PartyPlayer
 import tech.sethi.pebbles.partyapi.datahandler.PartyHandler
 import tech.sethi.pebbles.partyapi.datahandler.PartyResponse
 import tech.sethi.pebbles.partyapi.eventlistener.JoinPartyEvent
 import tech.sethi.pebbles.partyapi.eventlistener.LeavePartyEvent
 import tech.sethi.pebbles.partyapi.screens.PartyScreenHandler
+import tech.sethi.pebbles.partyapi.util.ConfigHandler
 import tech.sethi.pebbles.partyapi.util.PM
 import java.util.concurrent.CompletableFuture
 
 object PartyCommand {
 
     fun register(dispatcher: CommandDispatcher<ServerCommandSource>) {
-        val partyCommand = literal("party")
+        val partyCommand = literal("party").executes { context ->
+            val player = context.source.player ?: return@executes 1.also {
+                context.source.sendFeedback(
+                    { Text.of("You are not a player!") }, false
+                )
+            }
+
+            PartyScreenHandler.open(player)
+
+            1
+        }
 
         val menuCommand = literal("menu").executes { context ->
             val player = context.source.player ?: return@executes 1.also {
@@ -40,186 +52,123 @@ object PartyCommand {
         }
 
         val createCommand = literal("create").then(
-            CommandManager.argument("partyName", StringArgumentType.string()).executes { context ->
-                    val partyName = StringArgumentType.getString(context, "partyName")
-                    val player = context.source.player?.name?.string ?: return@executes 1.also {
+            CommandManager.argument("partyname", StringArgumentType.string()).executes { context ->
+                    val player = context.source.player ?: return@executes 1.also {
                         context.source.sendFeedback(
                             { Text.of("You are not a player!") }, false
                         )
                     }
 
-                    // validate name, cannot contain spaces and special characters
-                    if (partyName.contains(" ") || partyName.contains("[^a-zA-Z0-9]")) {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<red>Party name can only contain letters and numbers!") }, false
-                        )
-                        return@executes 1
-                    }
+                    val partyName = StringArgumentType.getString(context, "partyname")
+                    val partyPlayer = PartyPlayer(player.uuidAsString, player.name.string)
+                    val party = Party(partyName, partyPlayer, mutableListOf(partyPlayer))
+                    val response = PartyHandler.db.createParty(party)
 
-                    val newParty = Party(
-                        partyName, player, mutableListOf(player), mutableListOf()
-                    )
-
-                    val response = PartyHandler.db.createParty(newParty)
-
-                    when (response) {
-                        PartyResponse.SUCCESS -> {
-                            context.source.sendFeedback(
-                                { PM.returnStyledText("<green>Party <blue>${partyName}</blue> created!") }, false
-                            )
-                        }
-
-                        PartyResponse.ALREADY_PARTY -> {
-                            context.source.sendFeedback(
-                                { PM.returnStyledText("<red>You are in a party or party with this name already exists.") },
-                                false
-                            )
-                        }
-
-                        else -> {
-                            context.source.sendFeedback(
-                                { PM.returnStyledText("<red>Something went wrong!") }, false
-                            )
-                        }
-                    }
+                    PM.sendText(player, response.message)
 
                     1
                 })
 
         val inviteCommand =
             literal("invite").then(CommandManager.argument("player", EntityArgumentType.player()).executes { context ->
-                val player = context.source.player?.name?.string ?: return@executes 1.also {
+                val player = context.source.player ?: return@executes 1.also {
                     context.source.sendFeedback(
                         { Text.of("You are not a player!") }, false
                     )
                 }
 
-                val party = PartyHandler.db.getPlayerParty(player)
+                val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
+                    context.source.sendFeedback(
+                        { Text.of("You are not in a party!") }, false
+                    )
+                }
 
-                if (party != null && party.owner == player) {
-                    val invitedPlayer = EntityArgumentType.getPlayer(context, "player")
-                    if (party.members.contains(invitedPlayer.name.string)) {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<red>Player <blue>${invitedPlayer.name.string}</blue> is already in your party!") },
+                val invitedPlayer = EntityArgumentType.getPlayer(context, "player")
+                val partyPlayer = PartyPlayer(invitedPlayer.uuidAsString, invitedPlayer.name.string)
+                val response = PartyHandler.db.invitePlayerToParty(partyPlayer, party.name)
+
+                PM.sendText(player, response.message)
+
+                if (ConfigHandler.config.datastore == ConfigHandler.DatastoreType.JSON) {
+                    if (response.success) {
+                        invitedPlayer.sendMessage(
+                            PM.returnStyledText("<green>You have been invited to <blue>${party.name} by ${context.source.player?.name?.string}</blue>!"),
                             false
                         )
-                    } else {
-                        party.invites.add(invitedPlayer.name.string)
-                        val response = PartyHandler.db.updateParty(party)
-                        when (response) {
-                            PartyResponse.SUCCESS -> {
-                                context.source.sendFeedback(
-                                    { PM.returnStyledText("<green>Player <blue>${invitedPlayer.name.string}</blue> invited!") },
-                                    false
-                                )
-
-                                invitedPlayer.sendMessage(
-                                    PM.returnStyledText("<green>You have been invited to <blue>${party.name} by ${context.source.player?.name?.string}</blue>!"),
-                                    false
-                                )
-                                invitedPlayer.sendMessage(
-                                    PM.returnStyledText("<green>Use <blue>/party join ${party.name}</blue> to join or click <u><aqua>[<click:run_command:'/party join ${party.name}'>HERE</click>]</aqua></u>!"),
-                                    false
-                                )
-                            }
-
-                            else -> {
-                                context.source.sendFeedback(
-                                    { PM.returnStyledText("<red>Something went wrong!") }, false
-                                )
-                            }
-                        }
+                        invitedPlayer.sendMessage(
+                            PM.returnStyledText("<green>Use <aqua>/party join ${party.name}</aqua> to join or click <u><aqua>[<click:run_command:'/party join ${party.name}'>HERE</click>]</aqua></u>!"),
+                            false
+                        )
                     }
-                } else {
-                    context.source.sendFeedback(
-                        { PM.returnStyledText("<red>You are not the owner of a party!") }, false
-                    )
                 }
 
                 1
             })
 
         val joinCommand =
-            literal("join").then(CommandManager.argument("partyName", StringArgumentType.string()).executes { context ->
-                val partyName = StringArgumentType.getString(context, "partyName")
-                val player = context.source.player?.name?.string ?: return@executes 1.also {
+            literal("join").then(CommandManager.argument("partyname", StringArgumentType.string()).executes { context ->
+                val player = context.source.player ?: return@executes 1.also {
                     context.source.sendFeedback(
                         { Text.of("You are not a player!") }, false
                     )
                 }
 
-                val party = PartyHandler.db.getParty(partyName)
+                val partyName = StringArgumentType.getString(context, "partyname")
 
-                if (party != null) {
-                    if (party.invites.contains(player)) {
-                        party.members.add(player)
-                        party.invites.remove(player)
-                        val response = PartyHandler.db.updateParty(party)
-                        when (response) {
-                            PartyResponse.SUCCESS -> {
-                                context.source.sendFeedback(
-                                    { PM.returnStyledText("<green>You have joined <blue>${party.name}</blue>!") }, false
-                                )
-                                JoinPartyEvent.EVENT.invoker().onJoinParty(player)
-                            }
-
-                            else -> {
-                                context.source.sendFeedback(
-                                    { PM.returnStyledText("<red>Something went wrong!") }, false
-                                )
-                            }
-                        }
-                    } else {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<red>You are not invited to <blue>${party.name}</blue>!") }, false
-                        )
-                    }
-                } else {
+                val party = PartyHandler.db.getParty(partyName) ?: return@executes 1.also {
                     context.source.sendFeedback(
-                        { PM.returnStyledText("<red>Party <blue>${partyName}</blue> does not exist!") }, false
+                        { Text.of("Party <aqua>$partyName</aqua> does not exist!") }, false
                     )
                 }
+
+                val partyPlayer = PartyPlayer(player.uuidAsString, player.name.string)
+
+                val response = PartyHandler.db.addPlayerToParty(partyPlayer, partyName)
+
+                PM.sendText(player, response.message)
+
+                if (response.success) {
+                    party.members.forEach {
+                        val member = PartyAPI.server!!.getPlayerManager().getPlayer(it.name)
+                        member?.sendMessage(
+                            PM.returnStyledText("<green>Player <aqua>${player.name.string}</aqua> has joined the party!"),
+                            false
+                        )
+                    }
+                }
+
 
                 1
             })
 
         val leaveCommand = literal("leave").executes { context ->
-            val player = context.source.player?.name?.string ?: return@executes 1.also {
+            val player = context.source.player ?: return@executes 1.also {
                 context.source.sendFeedback(
                     { Text.of("You are not a player!") }, false
                 )
             }
 
-            val party = PartyHandler.db.getPlayerParty(player)
-
-            if (party != null) {
-                if (party.owner == player) {
-                    context.source.sendFeedback(
-                        { PM.returnStyledText("<red>You are the owner of the party! Use <blue>/party disband</blue> to disband the party!") },
-                        false
-                    )
-                } else {
-                    party.members.remove(player)
-                    val response = PartyHandler.db.updateParty(party)
-                    when (response) {
-                        PartyResponse.SUCCESS -> {
-                            context.source.sendFeedback(
-                                { PM.returnStyledText("<green>You have left <blue>${party.name}</blue>!") }, false
-                            )
-                            LeavePartyEvent.EVENT.invoker().onLeaveParty(player)
-                        }
-
-                        else -> {
-                            context.source.sendFeedback(
-                                { PM.returnStyledText("<red>Something went wrong!") }, false
-                            )
-                        }
-                    }
-                }
-            } else {
+            val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
                 context.source.sendFeedback(
-                    { PM.returnStyledText("<red>You are not in a party!") }, false
+                    { Text.of("You are not in a party!") }, false
                 )
+            }
+
+            val partyPlayer = party.members.find { it.uuid == player.uuidAsString } ?: return@executes 1.also {
+                context.source.sendFeedback(
+                    { Text.of("You are not in a party!") }, false
+                )
+            }
+
+            val response = PartyHandler.db.removePlayerFromParty(partyPlayer.uuid, party.name)
+
+            PM.sendText(player, response.message)
+
+            if (response.success) {
+                party.members.forEach {
+                    val member = PartyAPI.server!!.getPlayerManager().getPlayer(it.name) ?: return@forEach
+                    PM.sendText(member, response.message)
+                }
             }
 
             1
@@ -229,101 +178,75 @@ object PartyCommand {
             .suggests { context, builder ->
                 getPartyMemberSuggestion(context, builder)
             }.executes { context ->
-                val player = context.source.player?.name?.string ?: return@executes 1.also {
+                val player = context.source.player ?: return@executes 1.also {
                     context.source.sendFeedback(
                         { Text.of("You are not a player!") }, false
                     )
                 }
 
-                val party = PartyHandler.db.getPlayerParty(player)
-
-                if (party != null && party.owner == player) {
-                    val playerToKick = StringArgumentType.getString(context, "player")
-                    if (playerToKick == party.owner) {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<red>You cannot kick the owner of the party!") }, false
-                        )
-                        return@executes 1
-                    }
-                    if (party.members.contains(playerToKick)) {
-                        party.members.remove(playerToKick)
-                        val response = PartyHandler.db.updateParty(party)
-                        when (response) {
-                            PartyResponse.SUCCESS -> {
-                                context.source.sendFeedback(
-                                    { PM.returnStyledText("<green>Player <blue>${playerToKick}</blue> kicked from <blue>${party.name}</blue>!") },
-                                    false
-                                )
-
-                                val kickedPlayer = PartyAPI.server!!.playerManager.getPlayer(playerToKick)
-
-                                kickedPlayer?.sendMessage(
-                                    PM.returnStyledText("<red>You have been kicked from <blue>${party.name}</blue> by ${player}!"),
-                                    false
-                                )
-
-                                if (kickedPlayer != null) {
-                                    LeavePartyEvent.EVENT.invoker().onLeaveParty(playerToKick)
-                                }
-                            }
-
-                            else -> {
-                                context.source.sendFeedback(
-                                    { PM.returnStyledText("<red>Something went wrong!") }, false
-                                )
-                            }
-                        }
-                    } else {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<red>Player <blue>${playerToKick}</blue> is not in your party!") },
-                            false
-                        )
-                    }
-                } else {
+                val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
                     context.source.sendFeedback(
-                        { PM.returnStyledText("<red>You are not the owner of a party!") }, false
+                        { Text.of("You are not in a party!") }, false
                     )
+                }
+
+                val partyPlayer = party.members.find { it.uuid == player.uuidAsString } ?: return@executes 1.also {
+                    context.source.sendFeedback(
+                        { Text.of("You are not in a party!") }, false
+                    )
+                }
+
+                val playerToKick = StringArgumentType.getString(context, "player")
+
+                // check if context is party owner
+                if (partyPlayer.uuid != party.owner.uuid) return@executes 1.also {
+                    context.source.sendFeedback(
+                        { PM.returnStyledText("<red>Only party owners can kick members!") }, false
+                    )
+                }
+
+                val ptkPartyPlayer = party.members.find { it.name == playerToKick } ?: return@executes 1.also {
+                    context.source.sendFeedback(
+                        { PM.returnStyledText("Player <aqua>$playerToKick</aqua> is not in the party!") }, false
+                    )
+                }
+
+                val response = PartyHandler.db.removePlayerFromParty(ptkPartyPlayer.uuid, party.name)
+
+                if (response.success) {
+                    party.members.forEach {
+                        val member = PartyAPI.server!!.playerManager.getPlayer(it.name) ?: return@forEach
+                        PM.sendText(member, response.message)
+                    }
+
+                    val member = PartyAPI.server!!.playerManager.getPlayer(playerToKick) ?: return@executes 1
+                    PM.sendText(member, response.message)
                 }
 
                 1
             })
 
         val disbandCommand = literal("disband").executes { context ->
-            val player = context.source.player?.name?.string ?: return@executes 1.also {
+            val player = context.source.player ?: return@executes 1.also {
                 context.source.sendFeedback(
                     { Text.of("You are not a player!") }, false
                 )
             }
 
-            val party = PartyHandler.db.getPlayerParty(player)
-
-            if (party != null && party.owner == player) {
-                val members = party.members
-                val response = PartyHandler.db.deleteParty(party.name)
-                when (response) {
-                    PartyResponse.SUCCESS -> {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<green>Party <blue>${party.name}</blue> disbanded!") }, false
-                        )
-                        members.forEach { member ->
-                            if (member != player) PartyAPI.server!!.playerManager.getPlayer(member)?.sendMessage(
-                                PM.returnStyledText("<red>Your party <blue>${party.name}</blue> has been disbanded by ${player}!"),
-                                false
-                            )
-                            LeavePartyEvent.EVENT.invoker().onLeaveParty(member)
-                        }
-                    }
-
-                    else -> {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<red>Something went wrong!") }, false
-                        )
-                    }
-                }
-            } else {
+            val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
                 context.source.sendFeedback(
-                    { PM.returnStyledText("<red>You are not the owner of a party!") }, false
+                    { Text.of("You are not in a party!") }, false
                 )
+            }
+
+            val cachedMembers = party.members
+            val response = PartyHandler.db.deleteParty(party.name)
+
+            if (response.success) {
+                cachedMembers.forEach {
+                    val member = PartyAPI.server!!.playerManager.getPlayer(it.name) ?: return@forEach
+                    PM.sendText(member, response.message)
+                }
             }
 
             1
@@ -332,66 +255,33 @@ object PartyCommand {
         val transferOwnerCommand =
             literal("transferOwner").then(CommandManager.argument("newOwner", StringArgumentType.string())
                 .suggests(PartyCommand::getPartyMemberSuggestion).executes { context ->
-                    val newOwner = StringArgumentType.getString(context, "newOwner")
-                    val player = context.source.player?.name?.string ?: return@executes 1.also {
-                        context.source.sendFeedback(
-                            { Text.of("You are not a player!") }, false
-                        )
-                    }
 
-                    val party = PartyHandler.db.getPlayerParty(player)
-
-                    if (party != null && party.owner == player) {
-                        if (party.members.contains(newOwner)) {
-                            party.owner = newOwner
-                            val response = PartyHandler.db.updateParty(party)
-                            when (response) {
-                                PartyResponse.SUCCESS -> {
-                                    context.source.sendFeedback(
-                                        { PM.returnStyledText("<green>Ownership transferred to <blue>${newOwner}</blue>!") },
-                                        false
-                                    )
-                                }
-
-                                else -> {
-                                    context.source.sendFeedback(
-                                        { PM.returnStyledText("<red>Something went wrong!") }, false
-                                    )
-                                }
-                            }
-                        } else {
-                            context.source.sendFeedback(
-                                { PM.returnStyledText("<red>Player <blue>${newOwner}</blue> is not in your party!") },
-                                false
-                            )
-                        }
-                    } else {
-                        context.source.sendFeedback(
-                            { PM.returnStyledText("<red>You are not the owner of a party!") }, false
-                        )
-                    }
 
                     1
                 })
 
         val chatCommand = literal("chat").then(
             CommandManager.argument("message", StringArgumentType.greedyString()).executes { context ->
-                    val message = StringArgumentType.getString(context, "message")
-                    val player = context.source.player?.name?.string ?: return@executes 1.also {
+
+                    val player = context.source.player ?: return@executes 1.also {
                         context.source.sendFeedback(
                             { Text.of("You are not a player!") }, false
                         )
                     }
 
-                    val party = PartyHandler.db.getPlayerParty(player)
-                    if (party != null) {
-                        val partyChat = PartyChat(party.name, player, message)
-                        PartyHandler.db.sendChat(partyChat)
-                    } else {
+                    val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
                         context.source.sendFeedback(
-                            { PM.returnStyledText("<red>You are not in a party!") }, false
+                            { Text.of("You are not in a party!") }, false
                         )
                     }
+
+                    val message = StringArgumentType.getString(context, "message")
+
+                    val chat = PartyChat(party.name, player.name.string, message)
+
+                    val response = PartyHandler.db.sendChat(chat)
+
+                    if (response.success.not()) PM.sendText(player, response.message)
 
                     1
                 })
@@ -414,12 +304,12 @@ object PartyCommand {
         context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder
     ): CompletableFuture<Suggestions> {
         val party = PartyHandler.db.getPlayerParty(
-            context.source.player?.name?.string ?: return CommandSource.suggestMatching(
+            context.source.player?.uuidAsString ?: return CommandSource.suggestMatching(
                 mutableListOf(), builder
             )
         )
         val members = party?.members ?: return CommandSource.suggestMatching(mutableListOf(), builder)
-        members.forEach { builder.suggest(it) }
+        members.forEach { builder.suggest(it.name) }
         return builder.buildFuture()
     }
 }

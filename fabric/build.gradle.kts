@@ -83,7 +83,7 @@ tasks.remapJar {
     injectAccessWidener.set(true)
     inputFile.set(tasks.shadowJar.get().archiveFile)
     dependsOn(tasks.shadowJar)
-    archiveClassifier.set(null as String?)
+    archiveClassifier.set("fabric")
 }
 
 tasks.jar {

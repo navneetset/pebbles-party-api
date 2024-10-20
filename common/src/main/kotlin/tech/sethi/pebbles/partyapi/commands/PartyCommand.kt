@@ -16,17 +16,12 @@ import tech.sethi.pebbles.partyapi.dataclass.Party
 import tech.sethi.pebbles.partyapi.dataclass.PartyChat
 import tech.sethi.pebbles.partyapi.dataclass.PartyPlayer
 import tech.sethi.pebbles.partyapi.datahandler.PartyHandler
-import tech.sethi.pebbles.partyapi.datahandler.PartyResponse
-import tech.sethi.pebbles.partyapi.eventlistener.JoinPartyEvent
-import tech.sethi.pebbles.partyapi.eventlistener.LeavePartyEvent
 import tech.sethi.pebbles.partyapi.screens.PartyScreenHandler
 import tech.sethi.pebbles.partyapi.util.ConfigHandler
 import tech.sethi.pebbles.partyapi.util.PM
 import java.util.concurrent.CompletableFuture
 
 object PartyCommand {
-
-    val playersInPartyChat = mutableListOf<String>()
 
     fun register(dispatcher: CommandDispatcher<ServerCommandSource>) {
         val partyCommand = literal("party").executes { context ->
@@ -55,21 +50,21 @@ object PartyCommand {
 
         val createCommand = literal("create").then(
             CommandManager.argument("partyname", StringArgumentType.string()).executes { context ->
-                val player = context.source.player ?: return@executes 1.also {
-                    context.source.sendFeedback(
-                        { Text.of("You are not a player!") }, false
-                    )
-                }
+                    val player = context.source.player ?: return@executes 1.also {
+                        context.source.sendFeedback(
+                            { Text.of("You are not a player!") }, false
+                        )
+                    }
 
-                val partyName = StringArgumentType.getString(context, "partyname")
-                val partyPlayer = PartyPlayer(player.uuidAsString, player.name.string)
-                val party = Party(partyName, partyPlayer, mutableListOf(partyPlayer))
-                val response = PartyHandler.db.createParty(party)
+                    val partyName = StringArgumentType.getString(context, "partyname")
+                    val partyPlayer = PartyPlayer(player.uuidAsString, player.name.string)
+                    val party = Party(partyName, partyPlayer, mutableListOf(partyPlayer))
+                    val response = PartyHandler.db.createParty(party)
 
-                PM.sendText(player, response.message)
+                    PM.sendText(player, response.message)
 
-                1
-            })
+                    1
+                })
 
         val inviteCommand =
             literal("invite").then(CommandManager.argument("player", EntityArgumentType.player()).executes { context ->
@@ -262,59 +257,109 @@ object PartyCommand {
                     1
                 })
 
-//        val chatCommand = literal("chat").then(
-//            CommandManager.argument("message", StringArgumentType.greedyString()).executes { context ->
-//
-//                    val player = context.source.player ?: return@executes 1.also {
-//                        context.source.sendFeedback(
-//                            { Text.of("You are not a player!") }, false
-//                        )
-//                    }
-//
-//                    val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
-//                        context.source.sendFeedback(
-//                            { Text.of("You are not in a party!") }, false
-//                        )
-//                    }
-//
-//                    val message = StringArgumentType.getString(context, "message")
-//
-//                    val chat = PartyChat(party.name, player.name.string, message)
-//
-//                    val response = PartyHandler.db.sendChat(chat)
-//
-//                    if (response.success.not()) PM.sendText(player, response.message)
-//
-//                    1
-//                })
+        val chatCommand = literal("chat").then(
+            CommandManager.argument("message", StringArgumentType.greedyString()).executes { context ->
 
-        val chatCommand = literal("chat").executes { context ->
-            val player = context.source.player ?: return@executes 1.also {
-                context.source.sendFeedback(
-                    { Text.of("You are not a player!") }, false
-                )
-            }
+                    val player = context.source.player ?: return@executes 1.also {
+                        context.source.sendFeedback(
+                            { Text.of("You are not a player!") }, false
+                        )
+                    }
 
-            if (playersInPartyChat.contains(player.uuidAsString)) {
-                playersInPartyChat.remove(player.uuidAsString)
-                PM.sendText(player, "Party chat disabled")
-            } else {
+                    val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
+                        context.source.sendFeedback(
+                            { Text.of("You are not in a party!") }, false
+                        )
+                    }
 
-                val party = PartyHandler.db.getPlayerParty(player.uuidAsString) ?: return@executes 1.also {
+                    if (party.hasChatToggled(player.uuidAsString)) {
+                        return@executes 1.also {
+                            context.source.sendFeedback(
+                                { PM.returnStyledText("<red>You have your Party Chat disabled!") }, false
+                            )
+                        }
+                    }
+
+                    val message = StringArgumentType.getString(context, "message")
+
+                    val chat = PartyChat(party.name, player.name.string, message)
+
+                    val response = PartyHandler.db.sendChat(chat)
+
+                    if (response.success.not()) PM.sendText(player, response.message)
+
+                    1
+                })
+
+        val listCommand = literal("list")
+            .executes { context ->
+                val player = context.source.player ?: return@executes 1.also {
                     context.source.sendFeedback(
-                        { Text.of("You are not in a party!") }, false
+                        { Text.of("You are not a player!") }, false
                     )
                 }
 
-                playersInPartyChat.add(player.uuidAsString)
-                PM.sendText(player, "Party chat enabled")
+                val party = PartyHandler.db.getPlayerParty(player.uuidAsString)
+                if (party != null) {
+                    val partyMembers = party.members
+                    if (partyMembers.isEmpty()) {
+                        context.source.sendFeedback( { PM.returnStyledText("<red>The party has no members!") }, false)
+                        return@executes 0
+                    }
+
+                    context.source.sendFeedback( { PM.returnStyledText("<gold>Party Members:") }, false)
+                    partyMembers.forEach { member ->
+                        val message = if (party.isOwner(member.uuid)) {
+                            PM.returnStyledText("<blue> - ${party.owner.name}<gold> \uD83D\uDC51</blue>")
+                        } else {
+                            PM.returnStyledText("<green> - ${member.name}")
+                        }
+                        context.source.sendFeedback( { message }, false)
+                    }
+
+                } else {
+                    context.source.sendFeedback(
+                        { PM.returnStyledText("<red>You are not in a party!") }, false
+                    )
+                }
+
+                1
+            }
+
+        val toggleChatCommand = literal("toggleChat")
+            .executes { context ->
+                val player = context.source.player ?: return@executes 1.also {
+                    context.source.sendFeedback(
+                        { Text.of("You are not a player!") }, false
+                    )
+                }
+
+                val party = PartyHandler.db.getPlayerParty(player.uuidAsString)
+                if (party != null) {
+                    if (party.noChatList.contains(player.uuidAsString)) {
+                        party.noChatList.remove(player.uuidAsString)
+                        context.source.sendFeedback(
+                            { PM.returnStyledText("<green>Enabled Party Chat!") }, false
+                        )
+                    } else {
+                        party.noChatList.add(player.uuidAsString)
+                        context.source.sendFeedback(
+                            { PM.returnStyledText("<red>Disabled Party Chat!") }, false
+                        )
+                    }
+
+                } else {
+                    context.source.sendFeedback(
+                        { PM.returnStyledText("<red>You are not in a party!") }, false
+                    )
+                }
+
+                1
             }
 
 
-            1
-        }
-
-
+        partyCommand.then(toggleChatCommand)
+        partyCommand.then(listCommand)
         partyCommand.then(menuCommand)
         partyCommand.then(createCommand)
         partyCommand.then(inviteCommand)

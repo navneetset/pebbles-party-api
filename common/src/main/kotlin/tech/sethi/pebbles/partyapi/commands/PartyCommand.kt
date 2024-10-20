@@ -275,9 +275,9 @@ object PartyCommand {
                 )
             }
 
-            if (party.hasChatToggled(player.uuidAsString)) {
+            if (party.hasChatMuted(player.uuidAsString)) {
                 context.source.sendFeedback(
-                    { Text.of("You have to toggle your party chat!") }, false
+                    { Text.of("You have to unmute your party chat!") }, false
                 )
                 return@executes 1
             }
@@ -328,7 +328,7 @@ object PartyCommand {
                 1
             }
 
-        val toggleChatCommand = literal("toggleChat")
+        val muteChatCommand = literal("muteChat")
             .executes { context ->
                 val player = context.source.player ?: return@executes 1.also {
                     context.source.sendFeedback(
@@ -341,13 +341,13 @@ object PartyCommand {
                     if (party.noChatList.contains(player.uuidAsString)) {
                         party.noChatList.remove(player.uuidAsString)
                         context.source.sendFeedback(
-                            { PM.returnStyledText("<green>Enabled Party Chat!") }, false
+                            { PM.returnStyledText("<green>Unmuted Party Chat!") }, false
                         )
                     } else {
                         playersInPartyChat.removeIf { it == player.uuidAsString }
                         party.noChatList.add(player.uuidAsString)
                         context.source.sendFeedback(
-                            { PM.returnStyledText("<red>Disabled Party Chat!") }, false
+                            { PM.returnStyledText("<red>Muted Party Chat!") }, false
                         )
                     }
 
@@ -361,7 +361,7 @@ object PartyCommand {
         }
 
 
-        partyCommand.then(toggleChatCommand)
+        partyCommand.then(muteChatCommand)
         partyCommand.then(listCommand)
         partyCommand.then(menuCommand)
         partyCommand.then(createCommand)

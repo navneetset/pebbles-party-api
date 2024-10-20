@@ -63,7 +63,7 @@ data class Party(
         return players
     }
 
-    fun hasChatToggled(uuid: String): Boolean {
+    fun hasChatMuted(uuid: String): Boolean {
         return uuid in noChatList
     }
 

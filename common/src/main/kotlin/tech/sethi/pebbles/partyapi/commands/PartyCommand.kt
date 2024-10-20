@@ -16,9 +16,6 @@ import tech.sethi.pebbles.partyapi.dataclass.Party
 import tech.sethi.pebbles.partyapi.dataclass.PartyChat
 import tech.sethi.pebbles.partyapi.dataclass.PartyPlayer
 import tech.sethi.pebbles.partyapi.datahandler.PartyHandler
-import tech.sethi.pebbles.partyapi.datahandler.PartyResponse
-import tech.sethi.pebbles.partyapi.eventlistener.JoinPartyEvent
-import tech.sethi.pebbles.partyapi.eventlistener.LeavePartyEvent
 import tech.sethi.pebbles.partyapi.screens.PartyScreenHandler
 import tech.sethi.pebbles.partyapi.util.ConfigHandler
 import tech.sethi.pebbles.partyapi.util.PM
@@ -275,6 +272,14 @@ object PartyCommand {
                         )
                     }
 
+                    if (party.hasChatToggled(player.uuidAsString)) {
+                        return@executes 1.also {
+                            context.source.sendFeedback(
+                                { PM.returnStyledText("<red>You have your Party Chat disabled!") }, false
+                            )
+                        }
+                    }
+
                     val message = StringArgumentType.getString(context, "message")
 
                     val chat = PartyChat(party.name, player.name.string, message)
@@ -286,7 +291,75 @@ object PartyCommand {
                     1
                 })
 
+        val listCommand = literal("list")
+            .executes { context ->
+                val player = context.source.player ?: return@executes 1.also {
+                    context.source.sendFeedback(
+                        { Text.of("You are not a player!") }, false
+                    )
+                }
 
+                val party = PartyHandler.db.getPlayerParty(player.uuidAsString)
+                if (party != null) {
+                    val partyMembers = party.members
+                    if (partyMembers.isEmpty()) {
+                        context.source.sendFeedback( { PM.returnStyledText("<red>The party has no members!") }, false)
+                        return@executes 0
+                    }
+
+                    context.source.sendFeedback( { PM.returnStyledText("<gold>Party Members:") }, false)
+                    partyMembers.forEach { member ->
+                        val message = if (party.isOwner(member.uuid)) {
+                            PM.returnStyledText("<blue> - ${party.owner.name}<gold> \uD83D\uDC51</blue>")
+                        } else {
+                            PM.returnStyledText("<green> - ${member.name}")
+                        }
+                        context.source.sendFeedback( { message }, false)
+                    }
+
+                } else {
+                    context.source.sendFeedback(
+                        { PM.returnStyledText("<red>You are not in a party!") }, false
+                    )
+                }
+
+                1
+            }
+
+        val toggleChatCommand = literal("toggleChat")
+            .executes { context ->
+                val player = context.source.player ?: return@executes 1.also {
+                    context.source.sendFeedback(
+                        { Text.of("You are not a player!") }, false
+                    )
+                }
+
+                val party = PartyHandler.db.getPlayerParty(player.uuidAsString)
+                if (party != null) {
+                    if (party.noChatList.contains(player.uuidAsString)) {
+                        party.noChatList.remove(player.uuidAsString)
+                        context.source.sendFeedback(
+                            { PM.returnStyledText("<green>Enabled Party Chat!") }, false
+                        )
+                    } else {
+                        party.noChatList.add(player.uuidAsString)
+                        context.source.sendFeedback(
+                            { PM.returnStyledText("<red>Disabled Party Chat!") }, false
+                        )
+                    }
+
+                } else {
+                    context.source.sendFeedback(
+                        { PM.returnStyledText("<red>You are not in a party!") }, false
+                    )
+                }
+
+                1
+            }
+
+
+        partyCommand.then(toggleChatCommand)
+        partyCommand.then(listCommand)
         partyCommand.then(menuCommand)
         partyCommand.then(createCommand)
         partyCommand.then(inviteCommand)

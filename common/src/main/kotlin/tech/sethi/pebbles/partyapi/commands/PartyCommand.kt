@@ -357,8 +357,8 @@ object PartyCommand {
                     )
                 }
 
-                1
-            }
+            1
+        }
 
 
         partyCommand.then(toggleChatCommand)

@@ -49,7 +49,8 @@ object RedisHandler {
                     RedisMessageType.PARTY_CHAT -> {
                         val partyChatMessage = gson.fromJson(redisMessage.json, PartyChatMessage::class.java)
                         MongoDatabaseHandler.parties[partyChatMessage.partyName]?.let { party ->
-                            party.getPlayerEntities().forEach { player ->
+                            val recipients = party.getPlayerEntities().filter { it.uuidAsString !in party.noChatList }
+                            recipients.forEach { player ->
                                 PM.sendText(player, partyChatMessage.message)
                             }
                         }

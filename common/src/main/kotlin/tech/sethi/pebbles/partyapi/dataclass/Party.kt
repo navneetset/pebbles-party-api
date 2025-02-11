@@ -8,7 +8,8 @@ data class Party(
     val name: String,
     var owner: PartyPlayer,
     val members: MutableList<PartyPlayer>,
-    val invites: MutableList<String> = mutableListOf()
+    val invites: MutableList<String> = mutableListOf(),
+    val noChatList: MutableSet<String> = mutableSetOf()
 ) {
 
     fun addMember(partyPlayer: PartyPlayer): Boolean {
@@ -61,6 +62,11 @@ data class Party(
         }
         return players
     }
+
+    fun hasChatMuted(uuid: String): Boolean {
+        return uuid in noChatList
+    }
+
 }
 
 data class PartyPlayer(val uuid: String, val name: String)

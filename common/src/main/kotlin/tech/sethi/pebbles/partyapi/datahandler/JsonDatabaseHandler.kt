@@ -171,8 +171,9 @@ object JsonDatabaseHandler : DBInterface {
         val chatFormat = ConfigHandler.config.partyChatFormat.replace("{player_name}", chat.sender)
             .replace("{message}", chat.message)
 
-        party.members.forEach {
-            PartyAPI.server!!.playerManager.getPlayer(it.name)?.sendMessage(PM.returnStyledText(chatFormat), false)
+        val recipients = party.members.filter { it.uuid !in party.noChatList }
+        recipients.forEach { member ->
+            PartyAPI.server!!.playerManager.getPlayer(member.name)?.sendMessage(PM.returnStyledText(chatFormat), false)
         }
 
         return PartyResponse.success("<green>Chat sent")
